@@ -1,0 +1,81 @@
+import cv2
+import numpy as np
+from sklearn.decomposition import PCA
+
+
+def preprocessing(data):
+
+    def z_score(dataa):
+        mean = np.mean(dataa, axis=0)
+        mean = np.reshape(mean, (1, 2))
+        std = np.std(dataa, axis=0)
+        std = np.reshape(std, (1, 2))
+        return (dataa - mean.repeat(len(dataa), axis = 0)) / std.repeat(len(dataa), axis = 0)
+
+    pca = PCA(n_components=2)
+    data1 = pca.fit_transform(data)  # 490*2
+    data2 = np.array(z_score(data1)).T # 2*490
+    bias = np.ones((1, len(data1)))  # input bias
+    data3 = np.vstack((data2, bias)) #3*490
+
+    return data3
+
+
+C = np.zeros((1, 1024))
+L = np.zeros((1, 1024))
+P = np.zeros((1, 1024))
+for i in range(490):
+    img_C = cv2.imread('D:/Data_train/Carambula/Carambula_train_%d.png'%(i), cv2.IMREAD_GRAYSCALE)  # 32*32
+    img_L = cv2.imread('D:/Data_train/Lychee/Lychee_train_%d.png'%(i), cv2.IMREAD_GRAYSCALE)
+    img_P = cv2.imread('D:/Data_train/Pear/Pear_train_%d.png'%(i), cv2.IMREAD_GRAYSCALE)
+    img_c = np.reshape(img_C, (1, 1024))
+    img_l = np.reshape(img_L, (1, 1024))
+    img_p = np.reshape(img_P, (1, 1024))
+    C = np.vstack((C, img_c))
+    L = np.vstack((L, img_l))
+    P = np.vstack((P, img_p))
+
+C = np.delete(C, 0, axis=0)  # 490*1024
+L = np.delete(L, 0, axis=0)
+P = np.delete(P, 0, axis=0)
+
+cc = np.zeros((1, len(C)))
+cl = np.ones((1, len(L)))
+cp = np.ones((1, len(P))) * 2
+new_c = preprocessing(C)
+new_l = preprocessing(L)
+new_p = preprocessing(P)
+traindata = np.hstack((new_c, new_l, new_p))
+trainlabel = np.hstack((cc, cl, cp))
+training_data = np.vstack((traindata, trainlabel))
+np.random.shuffle(training_data.T)
+
+
+Ct = np.zeros((1, 1024))
+Lt = np.zeros((1, 1024))
+Pt = np.zeros((1, 1024))
+for i in range(166):
+    img_Ct = cv2.imread('D:/Data_test/Carambula/Carambula_test_%d.png'%(i), cv2.IMREAD_GRAYSCALE)  # 32*32
+    img_Lt = cv2.imread('D:/Data_test/Lychee/Lychee_test_%d.png'%(i), cv2.IMREAD_GRAYSCALE)
+    img_Pt = cv2.imread('D:/Data_test/Pear/Pear_test_%d.png'%(i), cv2.IMREAD_GRAYSCALE)
+    img_ct = np.reshape(img_Ct, (1, 1024))
+    img_lt = np.reshape(img_Lt, (1, 1024))
+    img_pt = np.reshape(img_Pt, (1, 1024))
+    Ct = np.vstack((Ct, img_ct))
+    Lt = np.vstack((Lt, img_lt))
+    Pt = np.vstack((Pt, img_pt))
+
+Ct = np.delete(Ct, 0, axis=0)  # 490*1024
+Lt = np.delete(Lt, 0, axis=0)
+Pt = np.delete(Pt, 0, axis=0)
+
+tc = np.zeros((1, len(Ct)))
+tl = np.ones((1, len(Lt)))
+tp = np.ones((1, len(Pt))) * 2
+new_ct = preprocessing(Ct)
+new_lt = preprocessing(Lt)
+new_pt = preprocessing(Pt)
+testdata = np.hstack((new_ct, new_lt, new_pt))
+testlabel = np.hstack((tc, tl, tp))
+testing_data = np.vstack((testdata, testlabel))
+np.random.shuffle(testing_data.T)
