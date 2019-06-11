@@ -1,0 +1,131 @@
+from sklearn.decomposition import PCA
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from data import training_data, testing_data
+
+class NN:
+    def __init__(self, train, test, learning_rate):
+        self.train = train
+        self.test = test
+        self.testlabel = test[3, :]
+        self.inputsize = 3
+        self.hiddensize = 5
+        self.outputsize = 3
+        self.w1 = np.random.normal(loc=0, scale=0.5, size=(self.hiddensize, self.inputsize))
+        self.w2 = np.random.normal(loc=0, scale=0.5, size=(self.outputsize, self.hiddensize))
+        self.learning_rate = learning_rate
+
+    def sigmoid(self, s):  # 因為要用sigmod函數，所以input要經z_score
+        return 1/(1+np.exp(-s))
+
+    def sofmax(self, x):
+
+        exp = np.exp(x)
+        exp_sum = np.sum(exp, axis=0)
+        p = exp/exp_sum
+
+        return p
+
+    def devsigmoid(self, s):
+        S = self.sigmoid(s)
+        return S*(1-S)
+
+    def update(self, i):
+        global dw1
+        global dw2
+
+# 38~43 forward pass
+        z1 = np.dot(self.w1, self.train[0:3, i])  # hiddensize*1
+        y1 = self.sigmoid(z1)
+        z2 = np.dot(self.w2, y1)  # outputsize*1
+        y2 = self.sigmoid(z2)
+        predict = self.sofmax(y2)
+
+# 45~46 cost
+        p = np.array(predict)
+        pp = np.argsort(p)
+        print(pp[2])
+        cost = -np.log(max(p))
+
+# 48~88 backward pass
+        train = np.reshape(self.train[0:3, i], (1, 3))  # 只有求input layer和hidden layer間的weight時會需要用到hidden 和output layer間的w
+        train = np.repeat(train, self.hiddensize, axis=0)
+        y1 = np.reshape(y1, (1, self.hiddensize))
+        y1 = np.repeat(y1, self.outputsize, axis=0)
+        dw1 = []
+
+        if max(predict) == predict[0]:
+            dw20 = (predict[0] - 1) * self.devsigmoid(z2[0])
+            dw21 = (predict[1]) * self.devsigmoid(z2[1])
+            dw22 = (predict[2]) * self.devsigmoid(z2[2])
+
+            for ii in range(self.hiddensize):
+                dw1.append((predict[0] - 1) * self.devsigmoid(z2[0]) * self.w2[0][ii] * self.devsigmoid(z1[ii]))
+
+            dw2 = y1 * np.array([[dw20], [dw21], [dw22]])
+            dw1 = train * np.reshape(dw1, (self.hiddensize, 1))
+        elif max(predict) == predict[1]:
+            dw20 = (predict[0]) * self.devsigmoid(z2[0])
+            dw21 = (predict[1] - 1) * self.devsigmoid(z2[1])
+            dw22 = (predict[2]) * self.devsigmoid(z2[2])
+
+            for ii in range(self.hiddensize):
+                dw1.append((predict[1] - 1) * self.devsigmoid(z2[1]) * self.w2[1][ii] * self.devsigmoid(z1[ii]))
+
+            dw2 = y1 * np.array([[dw20], [dw21], [dw22]])
+            dw1 = train * np.reshape(dw1, (self.hiddensize, 1))
+        elif max(predict) == predict[2]:
+            dw20 = (predict[0]) * self.devsigmoid(z2[0])
+            dw21 = (predict[1]) * self.devsigmoid(z2[1])
+            dw22 = (predict[2] - 1) * self.devsigmoid(z2[2])
+
+            for ii in range(self.hiddensize):
+                dw1.append((predict[2] - 1) * self.devsigmoid(z2[2]) * self.w2[2][ii] * self.devsigmoid(z1[ii]))
+
+            dw2 = y1 * np.array([[dw20], [dw21], [dw22]])
+            dw1 = train * np.reshape(dw1, (self.hiddensize, 1))
+
+        self.w1 = self.w1 - self.learning_rate*dw1
+        self.w2 = self.w2 - self.learning_rate*dw2
+        return cost, self.w1, self.w2
+
+    def errorcount(self, w11, w22):
+        predict_label = []
+        for ee in range(166):
+            z1 = np.dot(w11, self.test[0:3, ee])  # hiddensize*1
+            y1 = self.sigmoid(z1)
+            z2 = np.dot(w22, y1)  # outputsize*1
+            y2 = self.sigmoid(z2)
+            predict = self.sofmax(y2)
+
+            predict = np.argsort(predict)
+            predict_label.append(predict[2])
+
+
+        e = 0
+        for i in range(166):
+            if predict_label[i] == self.testlabel[i]:
+                e = e + 1
+
+        print('accuracy = '+ str(e/166))
+
+
+if __name__ == '__main__':
+    nn = NN(train=training_data, test=testing_data, learning_rate=0.2)
+    costt = []
+    x = []
+    w1 = []
+    w2 = []
+    for i in range(1470):
+        costt.append(nn.update(i)[0])
+
+        x.append(i)
+        if i == 1469:
+            w1.append(nn.update(i)[1])
+            w2.append(nn.update(i)[2])
+    plt.plot(x, costt)
+    w1 = np.reshape(w1, (5, 3))
+    w2 = np.reshape(w2, (3, 5))
+    plt.show()
+    nn.errorcount(w11=w1, w22=w2)
