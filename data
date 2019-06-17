@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 
 
 def preprocessing(data):
@@ -12,13 +13,25 @@ def preprocessing(data):
         std = np.reshape(std, (1, 2))
         return (dataa - mean.repeat(len(dataa), axis = 0)) / std.repeat(len(dataa), axis = 0)
 
+    def t_score(dataa):
+        minn = [min(dataa[:, 0]), min(dataa[:, 1])]
+        maxx = [max(dataa[:, 0]), max(dataa[:, 1])]
+        return (dataa - minn) / (np.array(maxx) - minn)
+
     pca = PCA(n_components=2)
     data1 = pca.fit_transform(data)  # 490*2
-    data2 = np.array(z_score(data1)).T # 2*490
-    bias = np.ones((1, len(data1)))  # input bias
+    data2 = np.array(t_score(data1)).T # 2*490
+    bias = np.ones((1, len(data1)))/2  # input bias
     data3 = np.vstack((data2, bias)) #3*490
 
     return data3
+
+
+def visulized(datac, datal, datap):
+    plt.scatter(datac[0, :], datac[1, :], c='r')
+    plt.scatter(datal[0, :], datal[1, :], c='g')
+    plt.scatter(datap[0, :], datap[1, :], c='b')
+    plt.show()
 
 
 C = np.zeros((1, 1024))
@@ -50,6 +63,7 @@ trainlabel = np.hstack((cc, cl, cp))
 training_data = np.vstack((traindata, trainlabel))
 np.random.shuffle(training_data.T)
 
+#visulized(new_c, new_l, new_p)
 
 Ct = np.zeros((1, 1024))
 Lt = np.zeros((1, 1024))
@@ -79,3 +93,5 @@ testdata = np.hstack((new_ct, new_lt, new_pt))
 testlabel = np.hstack((tc, tl, tp))
 testing_data = np.vstack((testdata, testlabel))
 np.random.shuffle(testing_data.T)
+
+#visulized(new_ct, new_lt, new_pt)
