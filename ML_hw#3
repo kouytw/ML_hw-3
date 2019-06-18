@@ -1,6 +1,6 @@
 import numpy as np
-from data import training_data, testing_data
 import matplotlib.pyplot as plt
+from data import training_data, testing_data
 
 
 def sigmoid(z):
@@ -10,6 +10,15 @@ def sigmoid(z):
 def devsigmoid(z):
     return sigmoid(z)*(1 - sigmoid(z))
 
+
+def onehot(yhat):
+    if yhat == 0:
+        a = [1, 0, 0]
+    elif yhat == 1:
+        a = [0, 1, 0]
+    else:
+        a = [0, 0, 1]
+    return a
 
 def softmax(y):
 
@@ -28,14 +37,15 @@ def crossentropy(a, yhat):
     return e
 
 
-def dev_cross_and_soft(a, yhat):
-    if yhat == 0:
-        dedy = [a[0]-1, a[1], a[2]]
-    elif yhat == 1:
-        dedy = [a[0], a[1]-1, a[2]]
-    else:
-        dedy = [a[0], a[1], a[2]-1]
-    return dedy
+def dev_cross_and_soft_sigmoid(a, yhat, z1):
+    onehott = np.reshape(onehot(yhat), (3, 1))
+    dedz = np.reshape(devsigmoid(z1), (3, 1))*(
+        np.array([[a[0]-1, a[0], a[0]],
+                  [a[1], a[1]-1, a[1]],
+                  [a[2], a[2], a[2]-1]]).dot(onehott)
+    )
+
+    return dedz
 
 
 class NN:
@@ -46,12 +56,16 @@ class NN:
         self.inputsize = 3
         self.hiddensize = 10  # 其中一個是bias
         self.outputsize = 3
-        self.w0 = np.random.normal(loc=0, scale=0.1, size=(self.inputsize, self.hiddensize-1))
-        self.w1 = np.random.normal(loc=0, scale=0.1, size=(self.hiddensize, self.outputsize))
+        self.w0 = np.random.normal(loc=0, scale=0.5, size=(self.inputsize, self.hiddensize-1))
+        self.w1 = np.random.normal(loc=0, scale=0.5, size=(self.hiddensize, self.outputsize))
+        self.w00 = np.ones((self.inputsize, self.hiddensize-1))/2
+        self.w11 = np.ones((self.hiddensize, self.outputsize))/2
+        np.save('./weight/w0_'+str(0)+'.npy', self.w0)
+        np.save('./weight/w1_'+str(0)+'.npy', self.w1)
 
     def forward(self, inputtt, w0, w1):
         z0 = np.reshape(inputtt, (1, 3)).dot(w0)
-        y0 = np.append(sigmoid(z0), 0.5)
+        y0 = np.append(sigmoid(z0), 0.05)
         z1 = np.reshape(y0, (1, self.hiddensize)).dot(w1)
         y1 = sigmoid(z1*0.99)
         a = softmax(y1)
@@ -62,7 +76,10 @@ class NN:
         inputt = self.train[0:3, i]
         yhat = self.train[3, i]
 
-        parameters = self.forward(inputt, self.w0, self.w1)
+        w0 = np.load('./weight/w0_'+str(i)+'.npy')
+        w1 = np.load('./weight/w1_'+str(i)+'.npy')
+
+        parameters = self.forward(inputt, w0, w1)
 
         z0 = parameters["z0"][0]
         y0 = parameters["y0"]
@@ -70,41 +87,30 @@ class NN:
         y1 = parameters["y1"][0]
         a = parameters["a"][0]
 
-        dedy1 = dev_cross_and_soft(a, yhat)
-
-        dy1dz1 = devsigmoid(z1)
-        dedz1 = np.reshape(dedy1*dy1dz1, (1, 3))
+        dedz1 = np.reshape(dev_cross_and_soft_sigmoid(a, yhat, z1), (1, 3))
 
         dz1dw1 = np.reshape(y0, (self.hiddensize, 1))
 
         dw1 = dz1dw1.dot(dedz1)
 
-        dedy0 = dedz1.dot(self.w1[0:self.hiddensize-1, :].T)
+        dedy0 = dedz1.dot(w1[0:self.hiddensize-1, :].T)
         dedz0 = devsigmoid(z0)*dedy0
 
         dw0 = np.reshape(inputt, (3, 1)).dot(dedz0)
-        self.w1 = self.w1 - self.learning*dw1
-        self.w0 = self.w0 - self.learning*dw0
 
-        return crossentropy(a, yhat), self.w0, self.w1
+        w0 = w0 - self.learning*dw0
+        w1 = w1 - self.learning*dw1
+        np.save('./weight/w0_'+str(i+1)+'.npy', w0)
+        np.save('./weight/w1_'+str(i+1)+'.npy', w1)
+
+        c = crossentropy(a, yhat)
+        return c
 
 
-nn = NN(train=training_data,test=testing_data, learning=0.008)
-parameter = []
+nn = NN(train=training_data, test=testing_data, learning=0.005)
+cost = []
 for i in range(1470):
-    parameter.append(nn.train_weight(i))
-parameter = np.array(parameter)
-plt.plot(np.arange(0, 1470), parameter[:, 0])
+    cost.append(nn.train_weight(i))
+
+plt.plot(np.arange(0, 1470), cost)
 plt.show()
-w0, w1 = parameter[np.argmin(parameter[:, 0]), 1:3]
-
-P = []
-for i in range(1470):
-    p = nn.forward(training_data[0:3, i], w0, w1)
-    z = p["a"][0]
-    P.append(z)
-
-ll = np.argmax(P, axis=1)
-e = np.sum(ll == training_data[3, :])
-print(ll)
-print(e/1470)
