@@ -1,0 +1,137 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from data import training_data, testing_data
+from Dataloader import Data
+from sklearn.decomposition import PCA
+
+def sigmoid(z):
+    return 1/(1 - np.exp(-z))
+
+
+def devsigmoid(z, dldy):
+    return sigmoid(z)*(1 - sigmoid(z))*dldy
+
+
+def onehot(yhat):
+    if yhat == 0:
+        a = [1, 0, 0]
+    elif yhat == 1:
+        a = [0, 1, 0]
+    else:
+        a = [0, 0, 1]
+    return a
+
+def softmax(y):
+
+    exps = np.exp(y)
+    sum_exp = np.sum(exps)
+    return exps / sum_exp
+
+
+def crossentropy(a, yhat):
+    if yhat == 0:
+        e = -np.log(a[0])
+    elif yhat == 1:
+        e = -np.log(a[1])
+    else:
+        e = -np.log(a[2])
+    return e
+
+
+def dev_cross_and_soft(y1, yhat):
+    onehott = np.reshape(onehot(yhat), (1, 3))
+    dldy = y1-onehott
+
+    return dldy
+
+
+def backward(dldy, x, w):
+    dx = dldy.dot(w.T)
+    dw = (x.T).dot(dldy)
+    db = np.sum(dldy,axis=0)
+    return dx, dw, db
+
+
+class NN:
+    def __init__(self, train, trainlabel, test, learning):
+        self.train = train
+        self.trainlabel = trainlabel
+        self.test = test
+        self.learning = learning
+        self.inputsize = 3
+        self.hiddensize = 10  # 其中一個是bias
+        self.outputsize = 3
+        self.w0 = np.random.normal(loc=0, scale=0.5, size=(self.inputsize, self.hiddensize))
+        self.w1 = np.random.normal(loc=0, scale=0.5, size=(self.hiddensize, self.outputsize))
+        self.bias0 = np.random.normal(loc=0, scale=0.5, size=(self.hiddensize))
+        self.bias1 = np.random.normal(loc=0, scale=0.5, size=(self.outputsize))
+        self.w00 = np.ones((self.inputsize, self.hiddensize-1))/2
+        self.w11 = np.ones((self.hiddensize, self.outputsize))/2
+        np.save('./weight/w0_'+str(0)+'.npy', self.w0)
+        np.save('./weight/w1_'+str(0)+'.npy', self.w1)
+        np.save('./bias/b0_'+str(0)+'.npy', self.bias0)
+        np.save('./bias/b1_'+str(0)+'.npy', self.bias1)
+
+    def forward(self, inputtt, w0, w1, b0, b1):
+        z0 = np.reshape(inputtt, (1, 3)).dot(w0)
+        y0 = sigmoid(z0 + b0)
+        z1 = np.reshape(y0, (1, self.hiddensize)).dot(w1)
+        y1 = z1 + b1
+        a = softmax(y1)
+        parameters = {"z0": z0, "y0": y0, "y1": y1, "z1": z1, "a": a}
+        return parameters
+
+    def train_weight(self, i):
+        inputt = self.train[0:3, i]
+        yhat = self.trainlabel[i]
+
+        w0 = np.load('./weight/w0_'+str(i)+'.npy')
+        w1 = np.load('./weight/w1_'+str(i)+'.npy')
+        b0 = np.load('./bias/b0_'+str(i)+'.npy')
+        b1 = np.load('./bias/b1_'+str(i)+'.npy')
+
+        parameters = self.forward(inputt, w0, w1, b0, b1)
+
+        z0 = parameters["z0"][0]
+        y0 = parameters["y0"]
+        z1 = parameters["z1"][0]
+        y1 = parameters["y1"][0]
+        a = parameters["a"][0]
+        print(a)
+
+        dldy = np.reshape(dev_cross_and_soft(a, yhat), (1, 3))
+        y0 = np.reshape(y0, (1, 10))
+        dd, dw1, db1 = backward(dldy, y0, w1)
+        dd = devsigmoid(z0, dd)
+        inputt = np.reshape(inputt, (1, 3))
+        dd, dw0, db0 = backward(dd, inputt, w0)
+
+        w0 = w0 - self.learning*dw0
+        w1 = w1 - self.learning*dw1
+        b0 = b0 - self.learning*db0
+        b1 = b1 - self.learning*db1
+        np.save('./weight/w0_'+str(i+1)+'.npy', w0)
+        np.save('./weight/w1_'+str(i+1)+'.npy', w1)
+        np.save('./bias/b0_'+str(i+1)+'.npy', b0)
+        np.save('./bias/b1_'+str(i+1)+'.npy', b1)
+
+        c = crossentropy(a, yhat)
+        return c
+
+
+train = './Data_train'
+
+train_loader = Data(train, split=0)
+pca = train_loader.dataloading(batch_size=1470, pca=PCA(n_components=2))
+
+for data in train_loader:
+    x_train, y_train = data
+
+print(x_train.shape, y_train.shape)
+nn = NN(train=x_train.T, trainlabel=y_train, test=testing_data, learning=0.005)
+cost = []
+for i in range(1470):
+    cost.append(nn.train_weight(i))
+
+plt.plot(np.arange(0, 1470), cost)
+plt.show()
